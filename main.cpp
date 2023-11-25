@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>  // Added for inet_pton
 #include <unistd.h>
 #include <cstdlib>
 
@@ -44,6 +45,31 @@ void writeServerList(const std::vector<std::string>& serverList) {
 // Function to check if a server is already in the list
 bool isServerInList(const std::vector<std::string>& serverList, const std::string& newServer) {
     return std::find(serverList.begin(), serverList.end(), newServer) != serverList.end();
+}
+
+// Function to check if the given string is a valid IP address
+bool isValidIPAddress(const std::string& ipAddress) {
+    bool ret = false;
+    struct sockaddr_in sa;
+    ret = inet_pton(AF_INET, ipAddress.c_str(), &(sa.sin_addr)) != 0;
+    std::string out = ret?"good":"bad";
+    std::cout << __func__ << ": " << out << ", ip: " << ipAddress<< std::endl;
+    return ret;
+}
+
+// Function to check if the given IP address is a private (internal) address
+bool isPrivateIPAddress(const std::string& ipAddress) {
+    bool ret = false;
+    struct sockaddr_in sa;
+    if (inet_pton(AF_INET, ipAddress.c_str(), &(sa.sin_addr)) != 0) {
+        uint32_t ip = ntohl(sa.sin_addr.s_addr);
+        ret = ((ip >> 24) == 10) ||                           // 10.0.0.0/8
+               ((ip >> 20) == 0xAC1) ||                         // 172.16.0.0/12
+               ((ip >> 16) == 0xC0A8);                          // 192.168.0.0/16
+    }
+    std::string out = ret?"good":"bad";
+    std::cout << __func__ << ": " << out << ", ip: " << ipAddress<< std::endl;
+    return ret;
 }
 
 void handle_client(int client_socket) {
@@ -116,20 +142,31 @@ void handle_client(int client_socket) {
                         // For simplicity, we'll just print the IP address
                         std::cout << "Add Server: " << paramValue << std::endl;
 
-                        // Check if the server is in the list
-                        std::vector<std::string> serverList = readServerList();
-                        if (!isServerInList(serverList, paramValue)) {
-                            // If not in the list, add to the list
-                            serverList.push_back(paramValue);
-                            // Update the file with the new server list
-                            writeServerList(serverList);
+                        // Extract IP address from the parameter (remove port if present)
+                        size_t colonPos = paramValue.find(':');
+                        std::string ipAddress = (colonPos != std::string::npos) ? paramValue.substr(0, colonPos) : paramValue;
 
-                            // Send a response indicating that the add_server request was successful
-                            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nAdd Server request successful";
-                            send(client_socket, response, strlen(response), 0);
+                        // Check if the parameter is a valid IP address and not a private (internal) address
+                        if (isValidIPAddress(ipAddress) && !isPrivateIPAddress(ipAddress)) {
+                            // Check if the server is in the list
+                            std::vector<std::string> serverList = readServerList();
+                            if (!isServerInList(serverList, paramValue)) {
+                                // If not in the list, add to the list
+                                serverList.push_back(paramValue);
+                                // Update the file with the new server list
+                                writeServerList(serverList);
+
+                                // Send a response indicating that the add_server request was successful
+                                const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nAdd Server request successful";
+                                send(client_socket, response, strlen(response), 0);
+                            } else {
+                                // If the server is already in the list, send a response indicating that it already exists
+                                const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer already exists in the list";
+                                send(client_socket, response, strlen(response), 0);
+                            }
                         } else {
-                            // If the server is already in the list, send a response indicating that it already exists
-                            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer already exists in the list";
+                            // If the parameter is not a valid IP address or is a private address, send an error response
+                            const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid or private IP address";
                             send(client_socket, response, strlen(response), 0);
                         }
                     }
