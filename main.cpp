@@ -154,19 +154,6 @@ void handle_client(int client_socket) {
                         }
                         response << "]";
                         send(client_socket, response.str().c_str(), response.str().length(), 0);
-                    } else if (strcmp(param, "start_lanplay") == 0) {
-                        // Process the start_lanplay parameter
-                        // For simplicity, we'll just print the parameter value
-                        std::cout << "Start LANPlay: " << paramValue << std::endl;
-
-                        // TODO: Add your code to handle the start_lanplay parameter
-                        // You might want to parse the IP address and port and perform some action
-                        // For example, you could call a function like startLanPlay(paramValue.c_str());
-                        // where startLanPlay is a function you implement to handle LANPlay requests.
-
-                        // Send a response indicating that the LANPlay request was received
-                        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nLANPlay request received";
-                        send(client_socket, response, strlen(response), 0);
                     } else if (strcmp(param, "add_server") == 0) {
                         // Process the add_server parameter
                         // For simplicity, we'll just print the IP address
