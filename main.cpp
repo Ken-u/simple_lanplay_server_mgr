@@ -47,6 +47,36 @@ bool isServerInList(const std::vector<std::string>& serverList, const std::strin
     return std::find(serverList.begin(), serverList.end(), newServer) != serverList.end();
 }
 
+// Function to remove a server from the list
+bool removeServerFromList(const std::string& server, std::vector<std::string>& serverList) {
+    auto it = std::find(serverList.begin(), serverList.end(), server);
+    if (it != serverList.end()) {
+        serverList.erase(it);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+// Function to handle the "remove_server" request
+void handleRemoveServer(const std::string& paramValue, int client_socket) {
+    // Check if the server is in the list
+    std::vector<std::string> serverList = readServerList();
+
+    if (removeServerFromList(paramValue, serverList)) {
+        // Update the file with the new server list
+        writeServerList(serverList);
+
+        // Send a response indicating that the remove_server request was successful
+        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nRemove Server request successful";
+        send(client_socket, response, strlen(response), 0);
+    } else {
+        // If the server is not in the list, send a response indicating that it does not exist
+        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer does not exist in the list";
+        send(client_socket, response, strlen(response), 0);
+    }
+}
+
 // Function to check if the given string is a valid IP address
 bool isValidIPAddress(const std::string& ipAddress) {
     bool ret = false;
@@ -169,6 +199,13 @@ void handle_client(int client_socket) {
                             const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid or private IP address";
                             send(client_socket, response, strlen(response), 0);
                         }
+                    } else if (strcmp(param, "remove_server") == 0) {
+                        // Process the remove_server parameter
+                        // For simplicity, we'll just print the IP address
+                        std::cout << "Remove Server: " << paramValue << std::endl;
+
+                        // Handle the remove_server request
+                        handleRemoveServer(paramValue, client_socket);
                     }
                 }
 
