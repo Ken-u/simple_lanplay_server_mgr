@@ -8,7 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>  // Added for inet_pton
 #include <unistd.h>
-#include <cstdlib>
+#include <cstdlib>  // For system function
+#include <thread>
 
 const int PORT = 8080;
 const int BUFFER_SIZE = 1024;
@@ -102,6 +103,33 @@ bool isPrivateIPAddress(const std::string& ipAddress) {
     return ret;
 }
 
+// Function to start LANPlay with the specified IP address and port
+void startLanPlay(const std::string& ipAddress, int port) {
+    // Build the LANPlay command with the given IP address and port
+    std::string command = "bash ./mm.sh " + ipAddress + ":" + std::to_string(port);
+
+    std::cout << __func__ << ": " << command << std::endl;
+    // Use std::thread to run the command in a separate thread
+    std::thread([&command]() {
+        // Open a pipe to the command's standard output
+        FILE* pipe = popen(command.c_str(), "r");
+        if (!pipe) {
+            std::cerr << "Error opening pipe to LANPlay command" << std::endl;
+            return;
+        }
+
+        // Read the command's output line by line
+        char buffer[128];
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            // Process each line of the output
+            std::cout << "LANPlay output: " << buffer;
+        }
+
+        // Close the pipe
+        pclose(pipe);
+    }).detach(); // Detach the thread to allow it to run independently
+}
+
 void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE];
     ssize_t bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
@@ -158,15 +186,21 @@ void handle_client(int client_socket) {
                         // Process the start_lanplay parameter
                         // For simplicity, we'll just print the parameter value
                         std::cout << "Start LANPlay: " << paramValue << std::endl;
+                        // Extract IP address and port from the parameter
+                        size_t colonPos = paramValue.find(':');
+                        if (colonPos != std::string::npos) {
+                            std::string ipAddress = paramValue.substr(0, colonPos);
+                            int port = std::stoi(paramValue.substr(colonPos + 1));
 
-                        // TODO: Add your code to handle the start_lanplay parameter
-                        // You might want to parse the IP address and port and perform some action
-                        // For example, you could call a function like startLanPlay(paramValue.c_str());
-                        // where startLanPlay is a function you implement to handle LANPlay requests.
-
-                        // Send a response indicating that the LANPlay request was received
-                        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nLANPlay request received";
-                        send(client_socket, response, strlen(response), 0);
+                            // Handle the start_lanplay request
+                            startLanPlay(ipAddress, port);
+                            const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nStart LANPlay Server request successful";
+                            send(client_socket, response, strlen(response), 0);
+                        } else {
+                            // If the parameter does not contain a valid IP address and port, send an error response
+                            const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid IP address or port";
+                            send(client_socket, response, strlen(response), 0);
+                        }
                     } else if (strcmp(param, "add_server") == 0) {
                         // Process the add_server parameter
                         // For simplicity, we'll just print the IP address
