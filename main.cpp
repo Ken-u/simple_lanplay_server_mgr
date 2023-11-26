@@ -12,7 +12,30 @@
 
 const int PORT = 8002;
 const int BUFFER_SIZE = 1024;
-const char *SERVER_LIST_FILE = "server_list.txt";
+const char *SERVER_LIST_FILE = "/usr/lanplay_server/server_list.txt";
+
+const char* makeResponse(const char* httpStatus,
+                         const char* content,
+                         const char* type) {
+    char buffer[4096] = {0};
+    snprintf(buffer, sizeof(buffer), "%s\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: %s\r\n\r\n%s",
+                     httpStatus, type, content);
+    const char* result = strdup(buffer);
+    std::cout << __func__ << ": " << result << std::endl;
+    return result;
+}
+
+const char *makeBadResponse(const char* content) {
+    return makeResponse("HTTP/1.1 400 Bad Request", content, "text/plain");
+}
+
+const char *makeTextResponse(const char* content) {
+    return makeResponse("HTTP/1.1 200 OK", content, "text/plain");
+}
+
+const char *makeJsonResponse(const char* content) {
+    return makeResponse("HTTP/1.1 200 OK", content, "application/json");
+}
 
 // Function to read server list from file
 std::vector<std::string> readServerList() {
@@ -68,12 +91,14 @@ void handleRemoveServer(const std::string& paramValue, int client_socket) {
         writeServerList(serverList);
 
         // Send a response indicating that the remove_server request was successful
-        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nRemove Server request successful";
+        const char *response = makeTextResponse("Remove Server request successful");
         send(client_socket, response, strlen(response), 0);
+	free((void *)response);
     } else {
         // If the server is not in the list, send a response indicating that it does not exist
-        const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer does not exist in the list";
+        const char *response = makeTextResponse("Server does not exist in the list");
         send(client_socket, response, strlen(response), 0);
+	free((void *)response);
     }
 }
 
@@ -145,7 +170,7 @@ void handle_client(int client_socket) {
 
                         // Send the JSON response with server list
                         std::ostringstream response;
-                        response << "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n[";
+                        response << "[";
                         for (size_t i = 0; i < serverList.size(); ++i) {
                             response << "\"" << serverList[i] << "\"";
                             if (i < serverList.size() - 1) {
@@ -153,7 +178,9 @@ void handle_client(int client_socket) {
                             }
                         }
                         response << "]";
-                        send(client_socket, response.str().c_str(), response.str().length(), 0);
+			const char* jsonResp = makeJsonResponse(response.str().c_str());
+                        send(client_socket, jsonResp, strlen(jsonResp), 0);
+	                free((void *)jsonResp);
                     } else if (strcmp(param, "add_server") == 0) {
                         // Process the add_server parameter
                         // For simplicity, we'll just print the IP address
@@ -174,17 +201,20 @@ void handle_client(int client_socket) {
                                 writeServerList(serverList);
 
                                 // Send a response indicating that the add_server request was successful
-                                const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nAdd Server request successful";
+                                const char *response = makeTextResponse("Add Server request successful");
                                 send(client_socket, response, strlen(response), 0);
+	                        free((void *)response);
                             } else {
                                 // If the server is already in the list, send a response indicating that it already exists
-                                const char *response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nServer already exists in the list";
+                                const char *response = makeTextResponse("Server already exists in the list");
                                 send(client_socket, response, strlen(response), 0);
+	                        free((void *)response);
                             }
                         } else {
                             // If the parameter is not a valid IP address or is a private address, send an error response
-                            const char *response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nInvalid or private IP address";
+                            const char *response = makeBadResponse("Invalid or private IP address");
                             send(client_socket, response, strlen(response), 0);
+			    free((void *)response);
                         }
                     } else if (strcmp(param, "remove_server") == 0) {
                         // Process the remove_server parameter
