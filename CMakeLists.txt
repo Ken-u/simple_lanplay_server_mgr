@@ -16,3 +16,4 @@ set(SOURCE_FILES
 # link_directories(path_to_lan_play/build/lib)
 add_executable(lanplay-server-mgr ${SOURCE_FILES})
 #target_link_libraries(your_project lanplay)
+INSTALL(TARGETS lanplay-server-mgr RUNTIME DESTINATION bin)
